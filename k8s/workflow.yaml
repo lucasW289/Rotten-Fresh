@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: fruit-training-pro-
+  namespace: argo
+spec:
+  entrypoint: ml-pipeline
+  templates:
+  - name: ml-pipeline
+    dag:
+      tasks:
+      - name: train-model
+        template: train-template
+
+  - name: train-template
+    container:
+      image: professional-bot:v18
+      imagePullPolicy: IfNotPresent
+      command: ["python", "src/train.py"]
+      args: ["--config", "configs/base_config.yaml"]
+      env:
+      - name: MLFLOW_TRACKING_URI
+        value: "http://mlflow-service:5000"
