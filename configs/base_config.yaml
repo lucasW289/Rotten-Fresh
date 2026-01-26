@@ -1,6 +1,6 @@
 # Training Hyperparameters
 epochs: 5
-batch_size: 16
+batch_size: 32
 learning_rate: 0.001
 
 # Data Settings
@@ -9,5 +9,5 @@ img_height: 224
 img_width: 224
 
 # System Settings
-device: "cpu"   # Change to "cuda" if you have a GPU later
+device: "cpu"   
 experiment_name: "Fruit_Freshness_v1"

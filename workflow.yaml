@@ -1,0 +1,103 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: video-pipeline-
+spec:
+  entrypoint: main
+  arguments:
+    parameters:
+    - name: video_id
+      value: "vid-demo-1"
+    - name: localstack_url
+      value: "http://localstack.default.svc.cluster.local:4566"
+
+  templates:
+
+  - name: main
+    steps:
+    - - name: init-queues
+        template: init-queues
+    - - name: send-start
+        template: send-message
+        arguments:
+          parameters:
+          - name: queue
+            value: video-queue
+          - name: body
+            value: "START: {{workflow.parameters.video_id}}"
+    - - name: wait-for-done
+        template: wait-for-completion
+
+  - name: init-queues
+    container:
+      image: amazon/aws-cli
+      command: [sh, -c]
+      args:
+        - |
+          aws --endpoint-url={{workflow.parameters.localstack_url}} sqs create-queue --queue-name video-queue || true
+          aws --endpoint-url={{workflow.parameters.localstack_url}} sqs create-queue --queue-name completion-queue || true
+      env:
+      - name: AWS_ACCESS_KEY_ID
+        value: test
+      - name: AWS_SECRET_ACCESS_KEY
+        value: test
+      - name: AWS_DEFAULT_REGION
+        value: us-east-1
+
+  - name: send-message
+    inputs:
+      parameters:
+      - name: queue
+      - name: body
+    container:
+      image: amazon/aws-cli
+      command: [sh, -c]
+      args:
+        - |
+          QUEUE_URL=$(aws --endpoint-url={{workflow.parameters.localstack_url}} sqs get-queue-url \
+            --queue-name {{inputs.parameters.queue}} \
+            --query 'QueueUrl' --output text)
+
+          aws --endpoint-url={{workflow.parameters.localstack_url}} sqs send-message \
+            --queue-url "$QUEUE_URL" \
+            --message-body "{{inputs.parameters.body}}"
+      env:
+      - name: AWS_ACCESS_KEY_ID
+        value: test
+      - name: AWS_SECRET_ACCESS_KEY
+        value: test
+      - name: AWS_DEFAULT_REGION
+        value: us-east-1
+
+  - name: wait-for-completion
+    container:
+      image: amazon/aws-cli
+      command: [sh, -c]
+      args:
+        - |
+          QUEUE_URL=$(aws --endpoint-url={{workflow.parameters.localstack_url}} sqs get-queue-url \
+            --queue-name completion-queue \
+            --query 'QueueUrl' --output text)
+
+          echo "Waiting for DONE..."
+          while true; do
+            MSG=$(aws --endpoint-url={{workflow.parameters.localstack_url}} sqs receive-message \
+              --queue-url "$QUEUE_URL" \
+              --wait-time-seconds 5 \
+              --query 'Messages[0].Body' --output text)
+
+            echo "Received: $MSG"
+
+            if [ "$MSG" = "DONE: {{workflow.parameters.video_id}}" ]; then
+              echo "🎉 Workflow completed"
+              exit 0
+            fi
+            sleep 2
+          done
+      env:
+      - name: AWS_ACCESS_KEY_ID
+        value: test
+      - name: AWS_SECRET_ACCESS_KEY
+        value: test
+      - name: AWS_DEFAULT_REGION
+        value: us-east-1

@@ -9,7 +9,7 @@ spec:
   containers:
   - name: mlflow
     # CHANGE THIS: Use your own image
-    image: professional-bot:v18
+    image: alinnlw/fruit-app:v2
     # Important: Since it's local, tell K8s not to try downloading it
     imagePullPolicy: IfNotPresent
     command: ["mlflow", "server", "--host", "0.0.0.0"]

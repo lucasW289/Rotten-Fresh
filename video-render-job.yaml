@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: video-render-job-
+  namespace: argo
+spec:
+  entrypoint: main
+  # --- AUTO-DELETE LOGIC ---
+  # Deletes the workflow and pods 60 seconds after completion (Succeeded or Failed)
+  ttlStrategy:
+    secondsAfterCompletion: 60 
+  # Alternatively, use this to delete pods immediately but keep the workflow record:
+  # podGC:
+  #   strategy: OnPodCompletion
+  # -------------------------
+  
+  templates:
+  - name: main
+    dag:
+      tasks:
+        - name: render
+          template: render-video
+          arguments:
+            parameters:
+              - name: video-id
+                value: "vids-{{workflow.creationTimestamp.m}}"
+              - name: user-id
+                value: "user-124"
+
+  - name: render-video
+    inputs:
+      parameters:
+        - name: video-id
+        - name: user-id
+    container:
+      image: amazon/aws-cli:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e
+          URL="http://localstack.argo.svc.cluster.local:4566"
+          
+          echo "🔗 Getting Queue URL..."
+          ACTUAL_URL=$(aws sqs create-queue --endpoint-url $URL --queue-name video-render-queue --query 'QueueUrl' --output text --region us-east-1)
+          
+          echo "📤 Sending to $ACTUAL_URL"
+          aws sqs send-message \
+            --endpoint-url $URL \
+            --queue-url "$ACTUAL_URL" \
+            --message-body "{\"video_id\": \"{{inputs.parameters.video-id}}\", \"user_id\": \"{{inputs.parameters.user-id}}\"}" \
+            --region us-east-1
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "test"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "test"

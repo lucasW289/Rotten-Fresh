@@ -3,3 +3,4 @@ torchvision
 torchinfo
 mlflow
 PyYAML
+databricks-sdk

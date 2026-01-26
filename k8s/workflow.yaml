@@ -1,23 +1,41 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: fruit-training-pro-
+  generateName: fruit-training-remote-
   namespace: argo
 spec:
   entrypoint: ml-pipeline
   templates:
-  - name: ml-pipeline
-    dag:
-      tasks:
-      - name: train-model
-        template: train-template
+    - name: ml-pipeline
+      dag:
+        tasks:
+          - name: trigger-databricks
+            template: train-template
 
-  - name: train-template
-    container:
-      image: professional-bot:v18
-      imagePullPolicy: IfNotPresent
-      command: ["python", "src/train.py"]
-      args: ["--config", "configs/base_config.yaml"]
-      env:
-      - name: MLFLOW_TRACKING_URI
-        value: "http://mlflow-service:5000"
+    - name: train-template
+      container:
+        image: curlimages/curl:7.85.0
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo " Connecting to Databricks..."
+            
+            # This sends the "Start Button" signal to your specific Job ID
+            curl -X POST "${DATABRICKS_HOST}/api/2.1/jobs/run-now" \
+            -H "Authorization: Bearer ${DATABRICKS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{ "job_id": 895923949411317 }'
+            
+        env:
+          # --- SECURE CREDENTIALS FROM SECRET.YAML ---
+          - name: DATABRICKS_HOST
+            valueFrom:
+              secretKeyRef:
+                name: databricks-credentials
+                key: host
+
+          - name: DATABRICKS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: databricks-credentials
+                key: token
